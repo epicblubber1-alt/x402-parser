@@ -1,0 +1,17 @@
+{
+  "name": "@x402-parser/bench",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "make-pdfs": "node make-pdfs.mjs",
+    "bench": "node bench.mjs"
+  },
+  "dependencies": {
+    "@x402/evm": "^2.14.0",
+    "@x402/fetch": "^2.14.0",
+    "dotenv": "^16.4.0",
+    "pdf-lib": "^1.17.1",
+    "viem": "^2.21.0"
+  }
+}

@@ -1,0 +1,24 @@
+# x402 Fast PDF Parser — edge seller (TESTNET ONLY)
+name = "x402-parser-edge"
+main = "src/index.ts"
+compatibility_date = "2026-05-01"
+# nodejs_compat: @x402/hono uses Buffer when capturing the response for settlement.
+compatibility_flags = ["nodejs_compat"]
+
+# Parsing needs real CPU time; the default 30s ceiling is plenty, but pin a
+# 5s cap to match the parse jail. Requires the Workers Paid plan — on the
+# free plan delete this block (and expect large PDFs to hit the CPU limit).
+[limits]
+cpu_ms = 5000
+
+[vars]
+# Receiving wallet ADDRESS only — no private keys anywhere in the seller.
+PAYMENT_ADDRESS = "0x0000000000000000000000000000000000000000" # TODO: your Base Sepolia address
+# Public x402 facilitator (supports Base Sepolia testnet, no API key needed).
+FACILITATOR_URL = "https://www.x402.org/facilitator"
+
+# Replay protection + per-wallet rate limiting.
+# Create with: wrangler kv namespace create PARSER_KV
+[[kv_namespaces]]
+binding = "PARSER_KV"
+id = "TODO_set_after_wrangler_kv_namespace_create"

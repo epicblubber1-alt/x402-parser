@@ -1,0 +1,24 @@
+{
+  "name": "@x402-parser/seller-edge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@llamaindex/liteparse-wasm": "^2.0.7",
+    "@x402-parser/core": "*",
+    "@x402/core": "^2.14.0",
+    "@x402/evm": "^2.14.0",
+    "@x402/hono": "^2.14.0",
+    "hono": "^4.6.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250620.0",
+    "typescript": "^5.6.0",
+    "wrangler": "^4.0.0"
+  }
+}

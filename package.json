@@ -1,0 +1,16 @@
+{
+  "name": "x402-parser",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/core",
+    "packages/seller-edge",
+    "bench"
+  ],
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "dev": "npm run dev -w @x402-parser/seller-edge",
+    "deploy": "npm run deploy -w @x402-parser/seller-edge",
+    "bench": "node bench/bench.mjs"
+  }
+}
