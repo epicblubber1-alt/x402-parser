@@ -67,7 +67,11 @@ HOW TO PAY (agents)
   2. Sign the payment with any x402 v2 client (e.g. @x402/fetch wrapping fetch,
      funded by a Base Sepolia USDC wallet) and retry with the payment header.
   3. The response settles on-chain automatically; the receipt is in the
-     X-PAYMENT-RESPONSE header.
+     PAYMENT-RESPONSE header.
+
+NOTE on parse_ms: Cloudflare freezes in-request clocks during CPU work
+(Spectre mitigation), so parse_ms reads ~0 in production at the edge. It is
+accurate in local dev and will be accurate on the heavy (Lambda) path.
 
 RULES
   - One payment proof per document: replays within 10 minutes get 409.

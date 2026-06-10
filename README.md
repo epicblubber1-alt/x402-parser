@@ -41,7 +41,11 @@ Success (200):
 ```
 
 `pages` is the page count. `parse_ms` measures only the parser, so payment and
-network overhead are visible by subtraction in the bench.
+network overhead are visible by subtraction in the bench. **Production caveat:**
+Cloudflare Workers freeze in-request clocks during CPU execution (Spectre
+mitigation; time only advances on I/O), so deployed `parse_ms` reads ~0. It is
+accurate under local `wrangler dev` and will be accurate on the Phase 2 Lambda
+path; at the edge, total latency is the honest number.
 
 Errors (always JSON, never a raw parser 500):
 
