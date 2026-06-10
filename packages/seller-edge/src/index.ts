@@ -17,6 +17,7 @@ import type { Env } from "./env.ts";
 import { TimeoutFacilitatorClient, VERIFY_TIMEOUT_MARKER } from "./facilitator.ts";
 import { ParseFailedError, parsePdf } from "./parser.ts";
 import {
+  bindPaymentProof,
   paymentProofId,
   rateLimitGuard,
   recordPaymentProof,
@@ -168,6 +169,15 @@ app.on(
       );
     }
 
+    // The x402 proof itself signs nothing about the document, so bind it to
+    // this SHA before parsing: a 422 can be retried with the same document,
+    // but the proof can't be shopped across different payloads.
+    const paymentHeader = c.req.header("payment-signature") ?? c.req.header("x-payment");
+    const proofId = paymentHeader ? await paymentProofId(paymentHeader) : null;
+    if (proofId) {
+      await bindPaymentProof(c.env.PARSER_KV, proofId, sha256);
+    }
+
     let parsed;
     try {
       parsed = await parsePdf(bytes);
@@ -176,11 +186,10 @@ app.on(
       return c.json({ error: "unparseable_document", detail }, 422);
     }
 
-    // Burn the payment proof only after a successful parse, so failed
-    // requests (4xx never settle) can be retried with the same proof.
-    const paymentHeader = c.req.header("payment-signature") ?? c.req.header("x-payment");
-    if (paymentHeader) {
-      await recordPaymentProof(c.env.PARSER_KV, await paymentProofId(paymentHeader));
+    // Fully burn the proof only after a successful parse, so failed requests
+    // (4xx never settle) can be retried — same document only, per the binding.
+    if (proofId) {
+      await recordPaymentProof(c.env.PARSER_KV, proofId);
     }
 
     const body: ParseResponse = { ...parsed, sha256 };

@@ -8,6 +8,16 @@ import type { Env } from "./env.ts";
 
 const app = new Hono<{ Bindings: Env }>();
 
+// Tripwire: even if this entry is ever deployed by mistake, it only answers
+// on a loopback host (wrangler dev), never on a workers.dev/custom domain.
+app.use(async (c, next) => {
+  const host = new URL(c.req.url).hostname;
+  if (host !== "localhost" && host !== "127.0.0.1") {
+    return c.json({ error: "dev_only", detail: "This entry point is for local development" }, 403);
+  }
+  return next();
+});
+
 app.post("/dev/parse", async (c) => {
   const bytes = new Uint8Array(await c.req.arrayBuffer());
   try {

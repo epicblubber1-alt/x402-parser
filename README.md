@@ -59,11 +59,11 @@ Errors (always JSON, never a raw parser 500):
 
 1. `Content-Length` ≤ 10MB, else 413 — before any payment work
 2. `X-Document-SHA256` well-formed, else 400
-3. Payment proof not already used (KV, 10-min TTL), else 409 — before burning a facilitator round trip
+3. Payment proof not already consumed, and not bound to a *different* document (KV, 10-min TTL), else 409 — before burning a facilitator round trip
 4. Payer wallet under 50 req/hour, else 429
 5. x402 middleware: missing payment → 402 challenge; facilitator verify with a 2s deadline → 503 + `Retry-After` on breach
-6. Parse inside a 5s jail → 422 on malformed input
-7. Settlement happens only after a successful (2xx) parse, so failed requests never charge the buyer; the proof is marked used only on success, so a 422/400 can be retried with the same proof
+6. The verified proof is bound to the document's SHA-256 (the x402 `exact` payload signs only the transfer, not the payload, so the seller enforces this binding), then parse inside a 5s jail → 422 on malformed input
+7. Settlement happens only after a successful (2xx) parse, so failed requests never charge the buyer; the proof is fully burned on success. A 422 can be retried with the *same* document, but one proof can't be shopped across different payloads until one parses
 
 ## Setup
 
@@ -94,7 +94,8 @@ npm run dev                                  # full app on :8787 (payment-gated)
 npx wrangler dev src/dev-entry.ts            # dev-only unpaid parse route for WASM smoke tests
 ```
 
-`src/dev-entry.ts` is never referenced by `wrangler.toml` and must not be deployed.
+`src/dev-entry.ts` is never referenced by `wrangler.toml`, is imported by no other
+module, and refuses to answer on non-loopback hosts even if deployed by mistake.
 
 ## Paying (until the Phase 3 buyer lands)
 
@@ -141,6 +142,10 @@ Local `workerd` parse-only numbers (no payment, M-series laptop): 2 pages → 6m
 - KV rate-limit counters are eventually consistent — the 50/hour limit is approximate.
 - Replay protection covers the KV TTL window (10 min); the on-chain nonce in the
   `exact` scheme prevents true double-spends beyond it.
+- The KV replay guard is eventually consistent (~60s) across edge locations: two
+  near-simultaneous requests with the same proof at different PoPs can both reach
+  the parser. Worst case is one wasted parse — never a double-settle, because the
+  EIP-3009 nonce can only settle once on-chain; the loser gets a settlement failure.
 - If settlement fails *after* a successful parse, the proof is already marked used —
   the buyer got the goods but the seller may not get paid. Acceptable at $0.002.
 - The payer address used for rate limiting is read from the unverified payment header;

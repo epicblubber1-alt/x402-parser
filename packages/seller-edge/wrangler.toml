@@ -13,7 +13,7 @@ cpu_ms = 5000
 
 [vars]
 # Receiving wallet ADDRESS only — no private keys anywhere in the seller.
-PAYMENT_ADDRESS = "0x0000000000000000000000000000000000000000" # TODO: your Base Sepolia address
+PAYMENT_ADDRESS = "0xa7737300F4A0dDB4aF3fA6e2D886D0dE37e01e08"
 # Public x402 facilitator (supports Base Sepolia testnet, no API key needed).
 FACILITATOR_URL = "https://www.x402.org/facilitator"
 

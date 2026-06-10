@@ -48,19 +48,35 @@ export function paymentProofId(paymentHeader: string): Promise<string> {
   return sha256HexOfString(paymentHeader);
 }
 
+/** KV value once a proof has produced a successful (settling) parse. */
+const PROOF_USED = "used";
+
 /**
  * Reject already-seen payment proofs (409) before spending a facilitator
- * round-trip on them. The proof is recorded by the /parse handler only after
- * a successful parse, so a request that fails pre-settlement can be retried
- * with the same proof. Requests without a payment header fall through — the
- * x402 middleware owns the 402 challenge.
+ * round-trip on them. The x402 exact-scheme payload signs only the EIP-3009
+ * transfer fields — nothing in the proof references the document — so we
+ * bind proof -> document SHA ourselves on first verified use (see the /parse
+ * handler). A proof that already paid out is dead ("used"); a proof bound to
+ * a different document is rejected so one payment can't be shopped across
+ * payloads until one parses. Retrying the SAME document after a 422/failed
+ * settle stays allowed. Requests without a payment header fall through — the
+ * x402 middleware owns the 402 challenge. Runs after shaHeaderGuard, so the
+ * declared SHA is present and well-formed here.
  */
 export async function replayGuard(c: Ctx, next: Next) {
   const paymentHeader = getPaymentHeader(c);
   if (paymentHeader) {
     const proofId = await paymentProofId(paymentHeader);
-    if (await c.env.PARSER_KV.get(replayKey(proofId))) {
+    const seen = await c.env.PARSER_KV.get(replayKey(proofId));
+    if (seen === PROOF_USED) {
       return c.json({ error: "replayed_payment", detail: "This payment proof was already used" }, 409);
+    }
+    const declaredSha = c.req.header(SHA256_HEADER)!.toLowerCase();
+    if (seen && seen !== declaredSha) {
+      return c.json(
+        { error: "replayed_payment", detail: "This payment proof is bound to a different document" },
+        409,
+      );
     }
   }
   return next();
@@ -70,8 +86,14 @@ export function replayKey(proofId: string): string {
   return `replay:${proofId}`;
 }
 
+/** Bind a verified proof to the document it was first used with (pre-parse). */
+export async function bindPaymentProof(kv: KVNamespace, proofId: string, sha256: string): Promise<void> {
+  await kv.put(replayKey(proofId), sha256, { expirationTtl: REPLAY_TTL_SECONDS });
+}
+
+/** Mark a proof as fully consumed after a successful parse. */
 export async function recordPaymentProof(kv: KVNamespace, proofId: string): Promise<void> {
-  await kv.put(replayKey(proofId), "1", { expirationTtl: REPLAY_TTL_SECONDS });
+  await kv.put(replayKey(proofId), PROOF_USED, { expirationTtl: REPLAY_TTL_SECONDS });
 }
 
 /**
