@@ -7,9 +7,10 @@ compatibility_flags = ["nodejs_compat"]
 
 # Parsing needs real CPU time; the default 30s ceiling is plenty, but pin a
 # 5s cap to match the parse jail. Requires the Workers Paid plan — on the
-# free plan delete this block (and expect large PDFs to hit the CPU limit).
-[limits]
-cpu_ms = 5000
+# free plan keep this commented out (and expect multi-10ms parses to risk
+# the free tier's 10ms CPU ceiling).
+# [limits]
+# cpu_ms = 5000
 
 [vars]
 # Receiving wallet ADDRESS only — no private keys anywhere in the seller.
@@ -21,4 +22,4 @@ FACILITATOR_URL = "https://www.x402.org/facilitator"
 # Create with: wrangler kv namespace create PARSER_KV
 [[kv_namespaces]]
 binding = "PARSER_KV"
-id = "TODO_set_after_wrangler_kv_namespace_create"
+id = "fb6b096bfa8243e1809345606bf55188"
