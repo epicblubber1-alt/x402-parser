@@ -6,11 +6,9 @@ compatibility_date = "2026-05-01"
 compatibility_flags = ["nodejs_compat"]
 
 # Parsing needs real CPU time; the default 30s ceiling is plenty, but pin a
-# 5s cap to match the parse jail. Requires the Workers Paid plan — on the
-# free plan keep this commented out (and expect multi-10ms parses to risk
-# the free tier's 10ms CPU ceiling).
-# [limits]
-# cpu_ms = 5000
+# 5s cap to match the parse jail. Requires the Workers Paid plan.
+[limits]
+cpu_ms = 5000
 
 [vars]
 # Receiving wallet ADDRESS only — no private keys anywhere in the seller.
