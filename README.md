@@ -128,16 +128,30 @@ Pass one funded key per document (`BENCH_PRIVATE_KEYS=0xa,0xb,0xc`) or the
 **Total** is the full paid exchange (POST → 402 → sign → retry → 200);
 **parse** is server-reported `parse_ms`. The difference is what x402 costs you.
 
-### Results (testnet, paid end-to-end) — pending first funded run
+### Results (testnet, paid end-to-end) — 2026-06-09, 50 runs/doc, US West client
 
 | document | size | runs ok | total p50 | total p95 | total p99 | parse p50 | parse p95 | parse p99 |
 |---|---|---|---|---|---|---|---|---|
-| text-2p.pdf | 0.00MB | — | — | — | — | — | — | — |
-| text-50p.pdf | 0.05MB | — | — | — | — | — | — | — |
-| text-5mb.pdf | 4.69MB | — | — | — | — | — | — | — |
+| text-2p.pdf | 0.00MB | 48/50 | 1427ms | 2095ms | 2160ms | 0ms | 0ms | 0ms |
+| text-50p.pdf | 0.05MB | 48/50 | 1676ms | 2167ms | 2234ms | 0ms | 0ms | 0ms |
+| text-5mb.pdf | 4.69MB | 49/50 | 3681ms | 4124ms | 4397ms | 0ms | 0ms | 0ms |
 
-Local `workerd` parse-only numbers (no payment, M-series laptop): 2 pages → 6ms,
-50 pages → 79ms, 5MB → 25ms.
+What the numbers actually say:
+
+- **Parsing is not the cost — x402 is.** Server parse time is 6–79ms locally
+  (production `parse_ms` reads 0 due to the frozen-clock caveat above), while the
+  paid exchange p50 is ~1.4s: a 402 round trip, client-side signing, facilitator
+  *verify*, and a synchronous on-chain *settle* before the response returns.
+  The original sub-second p95 target holds for parsing, not for the full paid
+  exchange — closing the gap means async settlement or challenge caching, which
+  is future work, not Phase 1.
+- **Big documents pay double transit.** The 402 challenge request uploads the
+  full body once before payment, the paid retry uploads it again — that's most
+  of the 5MB doc's extra ~2s, not parse time.
+- **Failure accounting:** the 2-page doc's two misses were 429s (the smoke test
+  had already spent 2 of that wallet's 50/hour budget — the rate limiter doing
+  its job); the other three were transient facilitator verify failures (~2%,
+  402 on the paid retry, buyer not charged, no client-side retry in the bench).
 
 ## Honest limitations
 
