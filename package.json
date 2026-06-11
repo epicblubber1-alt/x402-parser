@@ -11,6 +11,7 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "dev": "npm run dev -w @x402-parser/seller-edge",
     "deploy": "npm run deploy -w @x402-parser/seller-edge",
-    "bench": "node bench/bench.mjs"
+    "bench": "node bench/bench.mjs",
+    "till": "node scripts/till.mjs"
   }
 }
