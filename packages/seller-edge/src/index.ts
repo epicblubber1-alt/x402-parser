@@ -22,6 +22,7 @@ import { TimeoutFacilitatorClient, VERIFY_TIMEOUT_MARKER } from "./facilitator.t
 import { ParseFailedError, parsePdf } from "./parser.ts";
 import {
   bindPaymentProof,
+  ipRateLimitGuard,
   paymentProofId,
   rateLimitGuard,
   recordPaymentProof,
@@ -89,6 +90,7 @@ accurate in local dev and will be accurate on the heavy (Lambda) path.
 RULES
   - One payment proof per document: replays within 10 minutes get 409.
   - ${RATE_LIMIT_PER_HOUR} requests/hour per paying wallet, then 429.
+  - Unpaid request floods are throttled per-IP at the edge (100/min), then 429.
   - Malformed/unparseable PDFs get 422 (you are not charged: payment only
     settles after a successful parse).
 
@@ -213,6 +215,7 @@ async function verifyTimeoutTo503(c: Ctx, next: Next) {
 app.on(
   "POST",
   "/parse",
+  ipRateLimitGuard,
   verifyTimeoutTo503,
   sizeGuard,
   shaHeaderGuard,

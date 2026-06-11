@@ -17,6 +17,25 @@ function getPaymentHeader(c: Ctx): string | undefined {
 }
 
 /**
+ * Edge per-IP throttle, first in the chain — the cheapest possible rejection
+ * for unpaid floods, before any header parsing or KV reads. Complements (does
+ * not replace) the per-wallet KV limiter, which governs paid usage. The
+ * CF-Connecting-IP header is set by Cloudflare in production; when absent
+ * (local dev), skip the check.
+ */
+export async function ipRateLimitGuard(c: Ctx, next: Next) {
+  const ip = c.req.header("cf-connecting-ip");
+  if (ip) {
+    const { success } = await c.env.IP_RATE_LIMIT.limit({ key: ip });
+    if (!success) {
+      c.header("Retry-After", "60");
+      return c.json({ error: "rate_limited" }, 429);
+    }
+  }
+  return next();
+}
+
+/**
  * Reject oversized uploads before any payment work. A missing Content-Length
  * is not an error here: unpaid requests (incl. Bazaar crawler probes, which
  * may send no body at all) must fall through to the 402 challenge, and the

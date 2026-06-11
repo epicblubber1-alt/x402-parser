@@ -70,7 +70,7 @@ Errors (always JSON, never a raw parser 500):
 | 409 | Replayed payment proof (seen in the last 10 minutes) |
 | 413 | Document over 10MB |
 | 422 | Unparseable PDF or parse exceeded the 5s deadline (payment does **not** settle) |
-| 429 | Wallet over 50 requests/hour |
+| 429 | Wallet over 50 requests/hour, or unpaid request floods throttled per-IP at the edge (100/min) |
 | 503 | Facilitator verification timed out (2s budget) — retry per `Retry-After` |
 
 The mainnet deployment also declares **x402 Bazaar discovery metadata**
@@ -80,6 +80,8 @@ endpoint for agent discovery.
 
 ### Request ordering (the paid path)
 
+0. Per-IP edge rate limit (Workers Rate Limiting API, 100 req/60s), else 429 —
+   unpaid request floods are throttled per-IP at the edge before any other work
 1. Declared `Content-Length` ≤ 10MB, else 413 — before any payment work
 2. With a payment attached: `X-Document-SHA256` well-formed, else 400. Without
    one, fall through so the 402 challenge answers (crawler probes included)

@@ -10,4 +10,6 @@ export interface Env {
   CDP_API_KEY_SECRET?: string;
   /** Replay-protection + rate-limit storage. */
   PARSER_KV: KVNamespace;
+  /** Edge per-IP throttle (Workers Rate Limiting API) for unpaid floods. */
+  IP_RATE_LIMIT: RateLimit;
 }
