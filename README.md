@@ -1,22 +1,31 @@
 # x402 Fast PDF Parser
 
 Pay-per-use PDF text extraction sold over the [x402 payment protocol](https://docs.x402.org).
-Agents pay **$0.002 testnet USDC** per document on **Base Sepolia** and get structured
+Agents pay **$0.002 USDC** per document on **Base mainnet** and get structured
 text back. Speed is the product: every response carries `parse_ms`, and the target is
 sub-second p95 for born-digital PDFs under 5MB.
 
-> **Two deployments, one codebase.** The default Worker (`x402-parser-edge`) is
-> Base Sepolia testnet. `[env.mainnet]` deploys a separate Worker
-> (`x402-parser-edge-mainnet`) on **Base mainnet — real USDC** — with its own KV
-> namespace and the Coinbase CDP facilitator. Which chain a deployment uses is
-> driven by the `NETWORK` env var; `GET /health` always tells you which one
-> you're talking to. The seller holds a receiving wallet *address* only — no
-> wallet keys (mainnet adds CDP **API** credentials as Worker secrets).
+**Live endpoint:** https://x402-parser-edge-mainnet.epicblubber.workers.dev —
+discoverable via the x402 Bazaar ([x402scan listing](https://www.x402scan.com/recipient/0xa7737300F4A0dDB4aF3fA6e2D886D0dE37e01e08)).
+
+**Verify it yourself:** every parse settles on-chain — watch real settlements arrive
+at the seller address on [BaseScan](https://basescan.org/address/0xa7737300F4A0dDB4aF3fA6e2D886D0dE37e01e08).
+
+> **Two deployments, one codebase.** Production is `[env.mainnet]` →
+> `x402-parser-edge-mainnet`: Base mainnet, real USDC, settlement through the
+> Coinbase CDP facilitator, x402 Bazaar discovery metadata in every 402
+> challenge. The default Worker (`x402-parser-edge`) is the **Base Sepolia
+> testnet** deployment, kept as demo/staging — same code, keyless public
+> facilitator, no real money. The `NETWORK` env var picks the chain;
+> `GET /health` always tells you which one you're talking to. The seller holds
+> a receiving wallet *address* only — no wallet keys (mainnet adds CDP **API**
+> credentials as Worker secrets).
 
 ## Status
 
 - ✅ **Phase 1** — edge seller: Cloudflare Worker, Hono, `@x402/hono` v2 middleware,
-  LiteParse WASM, public testnet facilitator. *(this repo, current)*
+  LiteParse WASM. **Live on Base mainnet** with CDP facilitator settlement and
+  x402 Bazaar discovery; Base Sepolia deployment retained as demo/staging.
 - ⬜ Phase 2 — heavy path (Rust Lambda + OCR) for >5MB / `?ocr=true`
 - ⬜ Phase 3 — buyer agent (x402 client, doubles as integration test)
 
