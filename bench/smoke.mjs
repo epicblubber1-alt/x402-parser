@@ -2,7 +2,7 @@
 // exact same payment proof -> 409. Uses wallet 1 from BENCH_PRIVATE_KEYS.
 //   BENCH_URL=... BENCH_PRIVATE_KEYS=0x... node bench/smoke.mjs
 import "dotenv/config";
-import { wrapFetchWithPaymentFromConfig } from "@x402/fetch";
+import { decodePaymentResponseHeader, wrapFetchWithPaymentFromConfig } from "@x402/fetch";
 import { ExactEvmScheme } from "@x402/evm";
 import { privateKeyToAccount } from "viem/accounts";
 import { createHash } from "node:crypto";
@@ -63,6 +63,19 @@ console.log(
 );
 console.log("\n--- parsed text ---\n" + body.text);
 console.log("response headers:", [...res.headers.keys()].join(", "));
+
+const receiptHeader = res.headers.get("payment-response");
+if (receiptHeader) {
+  try {
+    const receipt = decodePaymentResponseHeader(receiptHeader);
+    console.log("\n--- settlement receipt ---");
+    console.log(JSON.stringify(receipt, null, 2));
+  } catch (err) {
+    console.log("could not decode payment-response header:", err.message);
+  }
+} else {
+  console.log("no payment-response header (settlement receipt missing)");
+}
 
 console.log("\n[2/2] replaying the same payment proof (409 expected) ...");
 if (!capturedPayment) {
