@@ -3,6 +3,7 @@ import type { Context, MiddlewareHandler, Next } from "hono";
 import { paymentMiddleware, x402ResourceServer } from "@x402/hono";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
 import { createFacilitatorConfig } from "@coinbase/x402";
+import { declareDiscoveryExtension } from "@x402/extensions/bazaar";
 import {
   MAX_DOCUMENT_BYTES,
   PRICE_USD,
@@ -141,8 +142,45 @@ function getPaymentMiddleware(env: Env): MiddlewareHandler {
             network,
             payTo: env.PAYMENT_ADDRESS as `0x${string}`,
           },
-          description: "Fast PDF text extraction (born-digital, no OCR)",
+          description:
+            "Sub-100ms PDF text extraction, $0.002/doc, born-digital PDFs, no OCR, 10MB cap",
           mimeType: "application/json",
+          // Bazaar discovery metadata — mainnet only; the CDP facilitator
+          // catalogs it so agents can find and call this endpoint unaided.
+          ...(isMainnet(network)
+            ? {
+                serviceName: "Fast PDF Parser",
+                tags: ["data", "tools"],
+                extensions: declareDiscoveryExtension({
+                  bodyType: "text",
+                  input: {
+                    body: "<raw PDF bytes (application/pdf), max 10MB>",
+                    requiredHeaders: {
+                      "Content-Type": "application/pdf",
+                      "X-Document-SHA256": "<lowercase hex sha-256 of the uploaded bytes>",
+                    },
+                  },
+                  inputSchema: {
+                    properties: {
+                      body: { type: "string", description: "Raw PDF file bytes" },
+                      requiredHeaders: {
+                        type: "object",
+                        description: "Headers every request must carry",
+                      },
+                    },
+                    required: ["body", "requiredHeaders"],
+                  },
+                  output: {
+                    example: {
+                      text: "Full extracted document text...",
+                      pages: 12,
+                      parse_ms: 38,
+                      sha256: "ab34...",
+                    },
+                  },
+                }),
+              }
+            : {}),
         },
       },
       resourceServer,

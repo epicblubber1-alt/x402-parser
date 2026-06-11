@@ -56,18 +56,24 @@ Errors (always JSON, never a raw parser 500):
 
 | Status | Meaning |
 |---|---|
-| 400 | Missing/invalid `X-Document-SHA256`, or it doesn't match the bytes |
-| 402 | No/invalid payment — challenge is in the `PAYMENT-REQUIRED` response header (base64 JSON) |
+| 400 | Payment attached but `X-Document-SHA256` missing/invalid, or it doesn't match the bytes |
+| 402 | No/invalid payment — challenge is in the `PAYMENT-REQUIRED` response header (base64 JSON). Unpaid requests always get 402 first (even empty ones — discovery crawlers probe this way) |
 | 409 | Replayed payment proof (seen in the last 10 minutes) |
-| 411 / 413 | Missing `Content-Length` / document over 10MB |
+| 413 | Document over 10MB |
 | 422 | Unparseable PDF or parse exceeded the 5s deadline (payment does **not** settle) |
 | 429 | Wallet over 50 requests/hour |
 | 503 | Facilitator verification timed out (2s budget) — retry per `Retry-After` |
 
+The mainnet deployment also declares **x402 Bazaar discovery metadata**
+(`serviceName` "Fast PDF Parser", tags `data`/`tools`, and a `bazaar.info.input`
+example request) in its 402 challenge, so the CDP facilitator can catalog the
+endpoint for agent discovery.
+
 ### Request ordering (the paid path)
 
-1. `Content-Length` ≤ 10MB, else 413 — before any payment work
-2. `X-Document-SHA256` well-formed, else 400
+1. Declared `Content-Length` ≤ 10MB, else 413 — before any payment work
+2. With a payment attached: `X-Document-SHA256` well-formed, else 400. Without
+   one, fall through so the 402 challenge answers (crawler probes included)
 3. Payment proof not already consumed, and not bound to a *different* document (KV, 10-min TTL), else 409 — before burning a facilitator round trip
 4. Payer wallet under 50 req/hour, else 429
 5. x402 middleware: missing payment → 402 challenge; facilitator verify with a 2s deadline → 503 + `Retry-After` on breach

@@ -16,13 +16,15 @@ function getPaymentHeader(c: Ctx): string | undefined {
   return c.req.header("payment-signature") ?? c.req.header("x-payment");
 }
 
-/** Reject oversized uploads before any payment work. */
+/**
+ * Reject oversized uploads before any payment work. A missing Content-Length
+ * is not an error here: unpaid requests (incl. Bazaar crawler probes, which
+ * may send no body at all) must fall through to the 402 challenge, and the
+ * handler re-checks the actual byte count after payment anyway.
+ */
 export async function sizeGuard(c: Ctx, next: Next) {
   const contentLength = c.req.header("content-length");
-  if (!contentLength) {
-    return c.json({ error: "length_required", detail: "Content-Length header is required" }, 411);
-  }
-  if (Number(contentLength) > MAX_DOCUMENT_BYTES) {
+  if (contentLength && Number(contentLength) > MAX_DOCUMENT_BYTES) {
     return c.json(
       { error: "payload_too_large", detail: `Documents are limited to ${MAX_DOCUMENT_BYTES} bytes` },
       413,
@@ -31,10 +33,19 @@ export async function sizeGuard(c: Ctx, next: Next) {
   return next();
 }
 
-/** Require a well-formed X-Document-SHA256 up front (verified against bytes later). */
+/**
+ * Require a well-formed X-Document-SHA256 — but only once a payment is
+ * attached. Unpaid requests get the 402 challenge first (discovery crawlers
+ * probe with empty/unparseable requests and must be answered with 402, not
+ * 400, or the resource won't be indexed); the byte-match check still happens
+ * in the handler after verification.
+ */
 export async function shaHeaderGuard(c: Ctx, next: Next) {
   const declared = c.req.header(SHA256_HEADER);
   if (!declared || !isSha256Hex(declared)) {
+    if (!getPaymentHeader(c)) {
+      return next(); // unpaid probe — the payment middleware owns the 402
+    }
     return c.json(
       { error: "missing_document_sha256", detail: `${SHA256_HEADER} header (hex SHA-256 of the upload) is required` },
       400,
