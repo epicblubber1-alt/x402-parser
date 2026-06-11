@@ -197,6 +197,13 @@ What the numbers actually say:
   its job); the other three were transient facilitator verify failures (~2%,
   402 on the paid retry, buyer not charged, no client-side retry in the bench).
 
+## Privacy
+
+No document retention: PDF bytes are parsed in memory and never written to
+storage or logs. We retain only a SHA-256 fingerprint of the document (replay
+protection, 10-min TTL) and the payer address (rate limiting, 1-hour TTL).
+Document content is not logged by the application.
+
 ## Honest limitations
 
 - The 5s parse deadline can't preempt WASM mid-instruction; it bounds the wait and

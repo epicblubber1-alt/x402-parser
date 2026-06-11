@@ -147,7 +147,9 @@ export async function rateLimitGuard(c: Ctx, next: Next) {
           429,
         );
       }
-      await c.env.PARSER_KV.put(key, String(count + 1), { expirationTtl: 7_200 });
+      // 1-hour retention, per the published privacy statement: the counter
+      // only needs to outlive its hour bucket.
+      await c.env.PARSER_KV.put(key, String(count + 1), { expirationTtl: 3_600 });
     }
   }
   return next();

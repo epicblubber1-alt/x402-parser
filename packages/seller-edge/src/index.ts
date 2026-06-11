@@ -43,6 +43,13 @@ const SERVICE_DESCRIPTION =
 const REPO_URL = "https://github.com/epicblubber1-alt/x402-parser";
 const X402SCAN_URL = "https://www.x402scan.com/recipient/0xa7737300F4A0dDB4aF3fA6e2D886D0dE37e01e08";
 
+/** Published verbatim in README, GET /, /.well-known/x402.json, and /llms.txt. */
+const PRIVACY_STATEMENT =
+  "No document retention: PDF bytes are parsed in memory and never written to " +
+  "storage or logs. We retain only a SHA-256 fingerprint of the document " +
+  "(replay protection, 10-min TTL) and the payer address (rate limiting, " +
+  "1-hour TTL). Document content is not logged by the application.";
+
 /**
  * Bazaar-style discovery declaration: how to call POST /parse and what comes
  * back. Used in the mainnet 402 challenge (route extensions) and in the
@@ -113,6 +120,7 @@ app.get("/.well-known/x402.json", (c) => {
     network,
     docs: `${origin}/`,
     source: REPO_URL,
+    privacy: PRIVACY_STATEMENT,
     resources: [
       {
         x402Version: 2,
@@ -164,6 +172,10 @@ app.get("/llms.txt", (c) => {
 - GET ${origin}/health — free liveness check (reports the active network)
 - GET ${origin}/.well-known/x402.json — free machine-readable manifest
 
+## Privacy
+
+${PRIVACY_STATEMENT}
+
 ## Links
 
 - Docs: ${origin}/
@@ -211,6 +223,9 @@ RULES
   - Unpaid request floods are throttled per-IP at the edge (100/min), then 429.
   - Malformed/unparseable PDFs get 422 (you are not charged: payment only
     settles after a successful parse).
+
+PRIVACY
+  ${PRIVACY_STATEMENT}
 
 OTHER ROUTES
   GET /health                  — free liveness check.
