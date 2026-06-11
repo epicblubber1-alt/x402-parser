@@ -93,52 +93,8 @@ endpoint for agent discovery.
 6. The verified proof is bound to the document's SHA-256 (the x402 `exact` payload signs only the transfer, not the payload, so the seller enforces this binding), then parse inside a 5s jail → 422 on malformed input
 7. Settlement happens only after a successful (2xx) parse, so failed requests never charge the buyer; the proof is fully burned on success. A 422 can be retried with the *same* document, but one proof can't be shopped across different payloads until one parses
 
-## Setup
-
-```bash
-npm install --legacy-peer-deps   # @x402/hono's optional React paywall confuses npm's resolver
-npm run typecheck
-```
-
-### Deploy the seller (Cloudflare)
-
-```bash
-cd packages/seller-edge
-npx wrangler kv namespace create PARSER_KV   # paste the id into wrangler.toml
-# edit wrangler.toml: set PAYMENT_ADDRESS to your Base Sepolia receiving address
-npx wrangler deploy
-```
-
-### Deploy mainnet (REAL USDC)
-
-The mainnet Worker verifies and settles through the Coinbase CDP facilitator,
-which needs API credentials from the [CDP portal](https://portal.cdp.coinbase.com):
-
-```bash
-cd packages/seller-edge
-npx wrangler deploy --env mainnet          # creates x402-parser-edge-mainnet
-npx wrangler secret put CDP_API_KEY_ID --env mainnet
-npx wrangler secret put CDP_API_KEY_SECRET --env mainnet
-```
-
-The paid route returns errors until both secrets are set. The testnet Worker is
-untouched by mainnet deploys — decommission it separately when ready.
-
-Notes:
-- `nodejs_compat` is required (the x402 middleware uses `Buffer`).
-- The `[limits] cpu_ms` block needs the Workers Paid plan; on the free plan remove it
-  and expect big documents to hit the 10ms CPU ceiling.
-- The WASM parser is ~2MB gzipped, within the paid-plan bundle limit.
-
-### Local dev
-
-```bash
-npm run dev                                  # full app on :8787 (payment-gated)
-npx wrangler dev src/dev-entry.ts            # dev-only unpaid parse route for WASM smoke tests
-```
-
-`src/dev-entry.ts` is never referenced by `wrangler.toml`, is imported by no other
-module, and refuses to answer on non-loopback hosts even if deployed by mistake.
+Self-hosting: standard Cloudflare Workers deployment; see `wrangler.toml` for
+required bindings and secrets.
 
 ## Paying (until the Phase 3 buyer lands)
 
@@ -154,20 +110,6 @@ Fund a throwaway wallet with Base Sepolia ETH (gasless transfers — the facilit
 settles) and testnet USDC from the [Circle faucet](https://faucet.circle.com/).
 
 ## Benchmark
-
-```bash
-node bench/make-pdfs.mjs                     # writes bench/samples/*.pdf
-cp bench/.env.example bench/.env             # set BENCH_URL + BENCH_PRIVATE_KEYS
-node bench/bench.mjs                         # 50 paid runs per document
-```
-
-Pass one funded key per document (`BENCH_PRIVATE_KEYS=0xa,0xb,0xc`) or the
-50/hour/wallet rate limit trips mid-run. Keys live in `bench/.env` (gitignored) only.
-
-**Mainnet spending guard:** the bench checks the target's `/health` first and
-refuses to run against a Base mainnet deployment unless invoked with `--mainnet`,
-and refuses if the planned spend (runs × docs × $0.002) exceeds `--max-spend`
-(default cap $0.50). `smoke.mjs` requires the same `--mainnet` flag.
 
 **Total** is the full paid exchange (POST → 402 → sign → retry → 200);
 **parse** is server-reported `parse_ms`. The difference is what x402 costs you.
