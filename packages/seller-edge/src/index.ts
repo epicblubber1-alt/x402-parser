@@ -37,6 +37,48 @@ const VERSION = "0.1.0";
 // the same service and answers directly without a redirect hop.
 const DEFAULT_FACILITATOR_URL = "https://www.x402.org/facilitator";
 
+const SERVICE_NAME = "Fast PDF Parser";
+const SERVICE_DESCRIPTION =
+  "Sub-100ms PDF text extraction, $0.002/doc, born-digital PDFs, no OCR, 10MB cap";
+const REPO_URL = "https://github.com/epicblubber1-alt/x402-parser";
+const X402SCAN_URL = "https://www.x402scan.com/recipient/0xa7737300F4A0dDB4aF3fA6e2D886D0dE37e01e08";
+
+/**
+ * Bazaar-style discovery declaration: how to call POST /parse and what comes
+ * back. Used in the mainnet 402 challenge (route extensions) and in the
+ * /.well-known/x402.json manifest on both networks.
+ */
+function parseDiscoveryExtension() {
+  return declareDiscoveryExtension({
+    bodyType: "text",
+    input: {
+      body: "<raw PDF bytes (application/pdf), max 10MB>",
+      requiredHeaders: {
+        "Content-Type": "application/pdf",
+        "X-Document-SHA256": "<lowercase hex sha-256 of the uploaded bytes>",
+      },
+    },
+    inputSchema: {
+      properties: {
+        body: { type: "string", description: "Raw PDF file bytes" },
+        requiredHeaders: {
+          type: "object",
+          description: "Headers every request must carry",
+        },
+      },
+      required: ["body", "requiredHeaders"],
+    },
+    output: {
+      example: {
+        text: "Full extracted document text...",
+        pages: 12,
+        parse_ms: 38,
+        sha256: "ab34...",
+      },
+    },
+  });
+}
+
 type Ctx = Context<{ Bindings: Env }>;
 
 const app = new Hono<{ Bindings: Env }>();
@@ -52,6 +94,82 @@ app.get("/health", (c) => {
     network: resolveNetwork(c.env.NETWORK),
   };
   return c.json(body);
+});
+
+/**
+ * Machine-readable service manifest, following the .well-known/x402.json
+ * convention used by other indexed x402 sellers (Rug Munch, Stratalize):
+ * top-level service metadata + a resources[] array of x402 payment configs
+ * with embedded Bazaar discovery extensions.
+ */
+app.get("/.well-known/x402.json", (c) => {
+  const network = resolveNetwork(c.env.NETWORK);
+  const origin = new URL(c.req.url).origin;
+  return c.json({
+    name: SERVICE_NAME,
+    provider: "epicblubber",
+    description: SERVICE_DESCRIPTION,
+    x402Version: 2,
+    network,
+    docs: `${origin}/`,
+    source: REPO_URL,
+    resources: [
+      {
+        x402Version: 2,
+        resource: `${origin}/parse`,
+        method: "POST",
+        description: SERVICE_DESCRIPTION,
+        mimeType: "application/json",
+        network,
+        scheme: "exact",
+        payTo: c.env.PAYMENT_ADDRESS,
+        price_usdc: "0.002",
+        extensions: parseDiscoveryExtension(),
+      },
+    ],
+  });
+});
+
+/** Plain-text service description for AI crawlers (llmstxt.org convention). */
+app.get("/llms.txt", (c) => {
+  const network = resolveNetwork(c.env.NETWORK);
+  const origin = new URL(c.req.url).origin;
+  const mainnet = isMainnet(network);
+  const chainLine = mainnet
+    ? "Payments are real USDC on Base mainnet (eip155:8453)."
+    : "This is the Base Sepolia TESTNET deployment (eip155:84532) — demo/staging, no real money.";
+  const verifyLines = mainnet
+    ? `- x402scan listing: ${X402SCAN_URL}
+- Verify settlements on-chain: https://basescan.org/address/${c.env.PAYMENT_ADDRESS}`
+    : `- Testnet explorer: https://sepolia.basescan.org/address/${c.env.PAYMENT_ADDRESS}`;
+  return c.text(`# ${SERVICE_NAME}
+
+> Pay-per-parse PDF text extraction for AI agents over the x402 payment protocol.
+> POST raw PDF bytes, get structured JSON text back. Born-digital PDFs, no OCR,
+> 10MB cap, sub-100ms parse. $0.002 USDC per document. ${chainLine}
+
+## How to pay
+
+1. POST your PDF to ${origin}/parse with Content-Type: application/pdf and
+   X-Document-SHA256: <lowercase hex sha-256 of the bytes>.
+2. You get HTTP 402 with x402 payment requirements in the PAYMENT-REQUIRED header.
+3. Sign with any x402 v2 client (e.g. @x402/fetch + a funded USDC wallet) and
+   retry with the X-PAYMENT header. Settlement receipt arrives in PAYMENT-RESPONSE.
+4. Payment only settles after a successful parse; malformed PDFs (422) are not charged.
+
+## Endpoints
+
+- POST ${origin}/parse — paid, $0.002 USDC: { text, pages, parse_ms, sha256 }
+- GET ${origin}/ — free, human/agent-readable service description
+- GET ${origin}/health — free liveness check (reports the active network)
+- GET ${origin}/.well-known/x402.json — free machine-readable manifest
+
+## Links
+
+- Docs: ${origin}/
+- Source: ${REPO_URL}
+${verifyLines}
+`);
 });
 
 app.get("/", (c) => {
@@ -95,7 +213,9 @@ RULES
     settles after a successful parse).
 
 OTHER ROUTES
-  GET /health  — free liveness check.
+  GET /health                  — free liveness check.
+  GET /.well-known/x402.json   — free machine-readable service manifest.
+  GET /llms.txt                — free plain-text description for AI crawlers.
 `);
 });
 
@@ -144,43 +264,15 @@ function getPaymentMiddleware(env: Env): MiddlewareHandler {
             network,
             payTo: env.PAYMENT_ADDRESS as `0x${string}`,
           },
-          description:
-            "Sub-100ms PDF text extraction, $0.002/doc, born-digital PDFs, no OCR, 10MB cap",
+          description: SERVICE_DESCRIPTION,
           mimeType: "application/json",
           // Bazaar discovery metadata — mainnet only; the CDP facilitator
           // catalogs it so agents can find and call this endpoint unaided.
           ...(isMainnet(network)
             ? {
-                serviceName: "Fast PDF Parser",
+                serviceName: SERVICE_NAME,
                 tags: ["data", "tools"],
-                extensions: declareDiscoveryExtension({
-                  bodyType: "text",
-                  input: {
-                    body: "<raw PDF bytes (application/pdf), max 10MB>",
-                    requiredHeaders: {
-                      "Content-Type": "application/pdf",
-                      "X-Document-SHA256": "<lowercase hex sha-256 of the uploaded bytes>",
-                    },
-                  },
-                  inputSchema: {
-                    properties: {
-                      body: { type: "string", description: "Raw PDF file bytes" },
-                      requiredHeaders: {
-                        type: "object",
-                        description: "Headers every request must carry",
-                      },
-                    },
-                    required: ["body", "requiredHeaders"],
-                  },
-                  output: {
-                    example: {
-                      text: "Full extracted document text...",
-                      pages: 12,
-                      parse_ms: 38,
-                      sha256: "ab34...",
-                    },
-                  },
-                }),
+                extensions: parseDiscoveryExtension(),
               }
             : {}),
         },

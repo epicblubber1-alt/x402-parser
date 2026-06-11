@@ -40,6 +40,8 @@ same flow, current header names (`PAYMENT-REQUIRED` / `X-PAYMENT`).
 | `POST /parse` | $0.002 USDC | Raw PDF bytes in, JSON text out |
 | `GET /health` | free | Liveness + version |
 | `GET /` | free | Human/agent-readable service description |
+| `GET /.well-known/x402.json` | free | Machine-readable manifest (endpoint, price, network, payTo, schemas) |
+| `GET /llms.txt` | free | Plain-text description for AI crawlers |
 
 ### `POST /parse`
 
