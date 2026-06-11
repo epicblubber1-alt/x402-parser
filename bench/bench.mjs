@@ -18,19 +18,59 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const SAMPLES_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "samples");
-const NETWORK = "eip155:84532"; // Base Sepolia — testnet only
+let NETWORK = "eip155:84532"; // overwritten from the target's /health before any payment
 const DOCS = ["text-2p.pdf", "text-50p.pdf", "text-5mb.pdf"];
 
 const BENCH_URL = process.env.BENCH_URL;
-const RUNS = Number(process.argv[2] ?? process.env.BENCH_RUNS ?? 50);
+const args = process.argv.slice(2);
+let MAINNET_OK = false;
+let MAX_SPEND_USD = 0.5;
+const positional = [];
+for (let i = 0; i < args.length; i++) {
+  const a = args[i];
+  if (a === "--mainnet") MAINNET_OK = true;
+  else if (a === "--max-spend") MAX_SPEND_USD = Number(args[++i]);
+  else if (a.startsWith("--max-spend=")) MAX_SPEND_USD = Number(a.slice("--max-spend=".length));
+  else positional.push(a);
+}
+const RUNS = Number(positional[0] ?? process.env.BENCH_RUNS ?? 50);
+const PRICE_USD = 0.002;
+
 const keys = (process.env.BENCH_PRIVATE_KEYS ?? process.env.BENCH_PRIVATE_KEY ?? "")
   .split(",")
   .map((k) => k.trim())
   .filter(Boolean);
 
 if (!BENCH_URL || keys.length === 0) {
-  console.error("Set BENCH_URL and BENCH_PRIVATE_KEYS (comma-separated testnet keys).");
+  console.error("Set BENCH_URL and BENCH_PRIVATE_KEYS (comma-separated keys).");
   process.exit(1);
+}
+
+/**
+ * Spending guard: benching a mainnet deployment moves real USDC, so it must
+ * be opted into explicitly and is capped (default $0.50) unless raised with
+ * --max-spend. The target's network comes from its own /health endpoint.
+ */
+async function assertSpendAllowed() {
+  const health = await fetch(`${BENCH_URL}/health`).then((r) => r.json());
+  NETWORK = health.network; // sign for whatever chain the target actually uses
+  if (health.network !== "eip155:8453") return; // testnet: no real money at stake
+  if (!MAINNET_OK) {
+    console.error(
+      `${BENCH_URL} is a Base MAINNET deployment (real USDC). ` +
+        "Re-run with --mainnet [--max-spend USD] if you really mean to pay for this bench.",
+    );
+    process.exit(1);
+  }
+  const planned = RUNS * DOCS.length * PRICE_USD;
+  if (!(MAX_SPEND_USD > 0) || planned > MAX_SPEND_USD) {
+    console.error(
+      `Planned spend $${planned.toFixed(3)} (${RUNS} runs x ${DOCS.length} docs x $${PRICE_USD}) ` +
+        `exceeds the $${(MAX_SPEND_USD || 0.5).toFixed(2)} cap. Raise it with --max-spend if intended.`,
+    );
+    process.exit(1);
+  }
+  console.log(`MAINNET bench authorized: planned spend $${planned.toFixed(3)} <= cap $${MAX_SPEND_USD.toFixed(2)}\n`);
 }
 if (keys.length < DOCS.length && RUNS * DOCS.length > 50) {
   console.warn(
@@ -99,7 +139,8 @@ function ms(n) {
 }
 
 async function main() {
-  console.log(`Benchmarking ${BENCH_URL} — ${RUNS} runs per document (testnet)\n`);
+  await assertSpendAllowed();
+  console.log(`Benchmarking ${BENCH_URL} — ${RUNS} runs per document\n`);
   const results = [];
   for (let d = 0; d < DOCS.length; d++) {
     results.push(await benchDoc(DOCS[d], paidFetchFor(d)));

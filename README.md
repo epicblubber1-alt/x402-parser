@@ -5,8 +5,13 @@ Agents pay **$0.002 testnet USDC** per document on **Base Sepolia** and get stru
 text back. Speed is the product: every response carries `parse_ms`, and the target is
 sub-second p95 for born-digital PDFs under 5MB.
 
-> **TESTNET ONLY.** This repo contains no mainnet configuration and accepts no real
-> money. The seller holds a receiving wallet *address* only — no private keys.
+> **Two deployments, one codebase.** The default Worker (`x402-parser-edge`) is
+> Base Sepolia testnet. `[env.mainnet]` deploys a separate Worker
+> (`x402-parser-edge-mainnet`) on **Base mainnet — real USDC** — with its own KV
+> namespace and the Coinbase CDP facilitator. Which chain a deployment uses is
+> driven by the `NETWORK` env var; `GET /health` always tells you which one
+> you're talking to. The seller holds a receiving wallet *address* only — no
+> wallet keys (mainnet adds CDP **API** credentials as Worker secrets).
 
 ## Status
 
@@ -85,6 +90,21 @@ npx wrangler kv namespace create PARSER_KV   # paste the id into wrangler.toml
 npx wrangler deploy
 ```
 
+### Deploy mainnet (REAL USDC)
+
+The mainnet Worker verifies and settles through the Coinbase CDP facilitator,
+which needs API credentials from the [CDP portal](https://portal.cdp.coinbase.com):
+
+```bash
+cd packages/seller-edge
+npx wrangler deploy --env mainnet          # creates x402-parser-edge-mainnet
+npx wrangler secret put CDP_API_KEY_ID --env mainnet
+npx wrangler secret put CDP_API_KEY_SECRET --env mainnet
+```
+
+The paid route returns errors until both secrets are set. The testnet Worker is
+untouched by mainnet deploys — decommission it separately when ready.
+
 Notes:
 - `nodejs_compat` is required (the x402 middleware uses `Buffer`).
 - The `[limits] cpu_ms` block needs the Workers Paid plan; on the free plan remove it
@@ -124,6 +144,11 @@ node bench/bench.mjs                         # 50 paid runs per document
 
 Pass one funded key per document (`BENCH_PRIVATE_KEYS=0xa,0xb,0xc`) or the
 50/hour/wallet rate limit trips mid-run. Keys live in `bench/.env` (gitignored) only.
+
+**Mainnet spending guard:** the bench checks the target's `/health` first and
+refuses to run against a Base mainnet deployment unless invoked with `--mainnet`,
+and refuses if the planned spend (runs × docs × $0.002) exceeds `--max-spend`
+(default cap $0.50). `smoke.mjs` requires the same `--mainnet` flag.
 
 **Total** is the full paid exchange (POST → 402 → sign → retry → 200);
 **parse** is server-reported `parse_ms`. The difference is what x402 costs you.

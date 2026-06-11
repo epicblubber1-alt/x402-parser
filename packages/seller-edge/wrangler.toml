@@ -1,4 +1,7 @@
-# x402 Fast PDF Parser — edge seller (TESTNET ONLY)
+# x402 Fast PDF Parser — edge seller.
+# Top-level config = the TESTNET Worker (x402-parser-edge).
+# [env.mainnet] = the separate Base mainnet Worker (x402-parser-edge-mainnet);
+# deploy it with: wrangler deploy --env mainnet
 name = "x402-parser-edge"
 main = "src/index.ts"
 compatibility_date = "2026-05-01"
@@ -21,3 +24,22 @@ FACILITATOR_URL = "https://www.x402.org/facilitator"
 [[kv_namespaces]]
 binding = "PARSER_KV"
 id = "fb6b096bfa8243e1809345606bf55188"
+
+# --- Base mainnet (REAL USDC) — separate Worker, own KV, CDP facilitator ---
+# Requires secrets (never committed):
+#   wrangler secret put CDP_API_KEY_ID --env mainnet
+#   wrangler secret put CDP_API_KEY_SECRET --env mainnet
+[env.mainnet]
+name = "x402-parser-edge-mainnet"
+
+[env.mainnet.limits]
+cpu_ms = 5000
+
+[env.mainnet.vars]
+PAYMENT_ADDRESS = "0xa7737300F4A0dDB4aF3fA6e2D886D0dE37e01e08"
+NETWORK = "eip155:8453"
+# No FACILITATOR_URL: mainnet always uses the CDP facilitator via secrets.
+
+[[env.mainnet.kv_namespaces]]
+binding = "PARSER_KV"
+id = "e2e08cbfb78a441e8c3e3eb8030b5706"

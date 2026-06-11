@@ -20,6 +20,14 @@ if (!BENCH_URL || !key) {
 const account = privateKeyToAccount(key);
 console.log(`buyer wallet: ${account.address}`);
 
+// Mainnet targets spend real USDC — require the explicit flag, mirror bench.mjs.
+const health = await fetch(`${BENCH_URL}/health`).then((r) => r.json());
+const NETWORK = health.network;
+if (NETWORK === "eip155:8453" && !process.argv.includes("--mainnet")) {
+  console.error(`${BENCH_URL} is a Base MAINNET deployment (real USDC). Re-run with --mainnet to spend $0.002.`);
+  process.exit(1);
+}
+
 // Capture the payment header the client attaches so we can replay it
 // verbatim. The wrapper may call fetch(Request) or fetch(url, init) — check
 // both places for the header.
@@ -32,7 +40,7 @@ const capturingFetch = (input, init = {}) => {
 };
 
 const paidFetch = wrapFetchWithPaymentFromConfig(capturingFetch, {
-  schemes: [{ network: "eip155:84532", client: new ExactEvmScheme(account) }],
+  schemes: [{ network: NETWORK, client: new ExactEvmScheme(account) }],
 });
 
 const samples = path.join(path.dirname(fileURLToPath(import.meta.url)), "samples");
@@ -53,6 +61,7 @@ console.log(
   `OK 200 in ${totalMs}ms total — pages=${body.pages} parse_ms=${body.parse_ms} ` +
     `text_len=${body.text.length} sha_match=${body.sha256 === sha256}`,
 );
+console.log("\n--- parsed text ---\n" + body.text);
 console.log("response headers:", [...res.headers.keys()].join(", "));
 
 console.log("\n[2/2] replaying the same payment proof (409 expected) ...");

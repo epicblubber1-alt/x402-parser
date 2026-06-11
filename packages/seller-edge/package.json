@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@coinbase/x402": "^2.1.0",
     "@llamaindex/liteparse-wasm": "^2.0.7",
     "@x402-parser/core": "*",
     "@x402/core": "^2.14.0",

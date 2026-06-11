@@ -2,6 +2,7 @@ import {
   FacilitatorResponseError,
   HTTPFacilitatorClient,
   type FacilitatorClient,
+  type FacilitatorConfig,
 } from "@x402/core/server";
 import { FACILITATOR_VERIFY_TIMEOUT_MS } from "@x402-parser/core";
 
@@ -28,8 +29,8 @@ export class FacilitatorTimeoutError extends FacilitatorResponseError {
 export class TimeoutFacilitatorClient implements FacilitatorClient {
   private readonly inner: HTTPFacilitatorClient;
 
-  constructor(url: string) {
-    this.inner = new HTTPFacilitatorClient({ url });
+  constructor(config: FacilitatorConfig) {
+    this.inner = new HTTPFacilitatorClient(config);
   }
 
   verify(...args: Parameters<FacilitatorClient["verify"]>) {

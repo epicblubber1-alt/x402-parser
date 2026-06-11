@@ -2,15 +2,18 @@ import { Hono } from "hono";
 import type { Context, MiddlewareHandler, Next } from "hono";
 import { paymentMiddleware, x402ResourceServer } from "@x402/hono";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
+import { createFacilitatorConfig } from "@coinbase/x402";
 import {
   MAX_DOCUMENT_BYTES,
-  NETWORK,
   PRICE_USD,
   RATE_LIMIT_PER_HOUR,
   SHA256_HEADER,
+  isMainnet,
+  resolveNetwork,
   sha256Hex,
   type ErrorResponse,
   type HealthResponse,
+  type Network,
   type ParseResponse,
 } from "@x402-parser/core";
 import type { Env } from "./env.ts";
@@ -41,12 +44,22 @@ const app = new Hono<{ Bindings: Env }>();
 // ---------------------------------------------------------------------------
 
 app.get("/health", (c) => {
-  const body: HealthResponse = { status: "ok", version: VERSION, network: NETWORK };
+  const body: HealthResponse = {
+    status: "ok",
+    version: VERSION,
+    network: resolveNetwork(c.env.NETWORK),
+  };
   return c.json(body);
 });
 
-app.get("/", (c) =>
-  c.text(`x402 Fast PDF Parser v${VERSION} (TESTNET)
+app.get("/", (c) => {
+  const network = resolveNetwork(c.env.NETWORK);
+  const networkLine = isMainnet(network)
+    ? `${PRICE_USD} USDC per document on Base mainnet (${network}). This is REAL
+  money — every parse settles an on-chain USDC transfer.`
+    : `${PRICE_USD} USDC per document on Base Sepolia (${network}). Testnet only —
+  this deployment accepts no real money.`;
+  return c.text(`x402 Fast PDF Parser v${VERSION} (${isMainnet(network) ? "Base mainnet" : "TESTNET"})
 
 Pay-per-use PDF text extraction over the x402 payment protocol.
 Born-digital PDFs only (no OCR). Speed is the product: every response
@@ -59,13 +72,12 @@ ENDPOINT
   -> 200 JSON: { "text": "...", "pages": 12, "parse_ms": 38, "sha256": "..." }
 
 PRICE
-  ${PRICE_USD} USDC per document on Base Sepolia (${NETWORK}). Testnet only —
-  this service accepts no real money.
+  ${networkLine}
 
 HOW TO PAY (agents)
   1. POST your document. You'll get HTTP 402 with x402 payment requirements.
   2. Sign the payment with any x402 v2 client (e.g. @x402/fetch wrapping fetch,
-     funded by a Base Sepolia USDC wallet) and retry with the payment header.
+     funded by a ${isMainnet(network) ? "Base mainnet" : "Base Sepolia"} USDC wallet) and retry with the payment header.
   3. The response settles on-chain automatically; the receipt is in the
      PAYMENT-RESPONSE header.
 
@@ -81,17 +93,34 @@ RULES
 
 OTHER ROUTES
   GET /health  — free liveness check.
-`),
-);
+`);
+});
 
 // ---------------------------------------------------------------------------
 // Paid route: guards -> x402 payment -> parse
 // ---------------------------------------------------------------------------
 
 /**
- * The x402 middleware needs PAYMENT_ADDRESS and the facilitator URL, which
- * only exist on c.env in Workers — so build it on first request and cache it
- * for the isolate's lifetime.
+ * Testnet talks to the public keyless facilitator; mainnet always uses the
+ * Coinbase CDP facilitator, which signs each request with CDP API credentials
+ * (Worker secrets — never in committed config).
+ */
+function facilitatorConfigFor(env: Env, network: Network) {
+  if (isMainnet(network)) {
+    if (!env.CDP_API_KEY_ID || !env.CDP_API_KEY_SECRET) {
+      throw new Error(
+        "Mainnet requires CDP_API_KEY_ID and CDP_API_KEY_SECRET secrets (wrangler secret put ... --env mainnet)",
+      );
+    }
+    return createFacilitatorConfig(env.CDP_API_KEY_ID, env.CDP_API_KEY_SECRET);
+  }
+  return { url: env.FACILITATOR_URL || DEFAULT_FACILITATOR_URL };
+}
+
+/**
+ * The x402 middleware needs PAYMENT_ADDRESS, NETWORK, and facilitator
+ * credentials, which only exist on c.env in Workers — so build it on first
+ * request and cache it for the isolate's lifetime.
  */
 let cachedPaymentMiddleware: MiddlewareHandler | null = null;
 
@@ -100,15 +129,16 @@ function getPaymentMiddleware(env: Env): MiddlewareHandler {
     if (!/^0x[0-9a-fA-F]{40}$/.test(env.PAYMENT_ADDRESS ?? "")) {
       throw new Error("PAYMENT_ADDRESS env var must be a 0x wallet address");
     }
-    const facilitator = new TimeoutFacilitatorClient(env.FACILITATOR_URL || DEFAULT_FACILITATOR_URL);
-    const resourceServer = new x402ResourceServer(facilitator).register(NETWORK, new ExactEvmScheme());
+    const network = resolveNetwork(env.NETWORK);
+    const facilitator = new TimeoutFacilitatorClient(facilitatorConfigFor(env, network));
+    const resourceServer = new x402ResourceServer(facilitator).register(network, new ExactEvmScheme());
     cachedPaymentMiddleware = paymentMiddleware(
       {
         "POST /parse": {
           accepts: {
             scheme: "exact",
             price: PRICE_USD,
-            network: NETWORK,
+            network,
             payTo: env.PAYMENT_ADDRESS as `0x${string}`,
           },
           description: "Fast PDF text extraction (born-digital, no OCR)",

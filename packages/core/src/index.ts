@@ -13,7 +13,24 @@ export const FACILITATOR_VERIFY_TIMEOUT_MS = 2_000; // 503 + Retry-After on brea
 export const REPLAY_TTL_SECONDS = 600; // 10-min window for seen payment proofs
 export const RATE_LIMIT_PER_HOUR = 50; // per payer wallet
 export const PRICE_USD = "$0.002";
-export const NETWORK = "eip155:84532"; // Base Sepolia — testnet only
+
+export const TESTNET_NETWORK = "eip155:84532"; // Base Sepolia
+export const MAINNET_NETWORK = "eip155:8453"; // Base mainnet — real USDC
+export type Network = typeof TESTNET_NETWORK | typeof MAINNET_NETWORK;
+
+/**
+ * Resolve the NETWORK env var. Unset defaults to testnet — mainnet must
+ * always be an explicit choice; anything else is a config error.
+ */
+export function resolveNetwork(value: string | undefined): Network {
+  if (!value || value === TESTNET_NETWORK) return TESTNET_NETWORK;
+  if (value === MAINNET_NETWORK) return MAINNET_NETWORK;
+  throw new Error(`NETWORK must be "${TESTNET_NETWORK}" or "${MAINNET_NETWORK}", got "${value}"`);
+}
+
+export function isMainnet(network: Network): boolean {
+  return network === MAINNET_NETWORK;
+}
 
 export const SHA256_HEADER = "X-Document-SHA256";
 
@@ -42,7 +59,7 @@ export interface ErrorResponse {
 export interface HealthResponse {
   status: "ok";
   version: string;
-  network: typeof NETWORK;
+  network: Network;
 }
 
 // ---------------------------------------------------------------------------

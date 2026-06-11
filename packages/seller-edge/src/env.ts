@@ -1,8 +1,13 @@
 export interface Env {
-  /** Receiving wallet address (0x…). Address only — the seller never holds keys. */
+  /** Receiving wallet address (0x…). Address only — the seller never holds wallet keys. */
   PAYMENT_ADDRESS: string;
-  /** x402 facilitator base URL (defaults to the public testnet facilitator). */
+  /** "eip155:84532" (Base Sepolia, default) or "eip155:8453" (Base mainnet). */
+  NETWORK?: string;
+  /** x402 facilitator base URL — testnet only; mainnet always uses the CDP facilitator. */
   FACILITATOR_URL?: string;
+  /** CDP API credentials (Worker secrets, mainnet only) for the Coinbase facilitator. */
+  CDP_API_KEY_ID?: string;
+  CDP_API_KEY_SECRET?: string;
   /** Replay-protection + rate-limit storage. */
   PARSER_KV: KVNamespace;
 }
